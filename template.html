@@ -17,9 +17,27 @@
                 margin-bottom: 20px;
             }
             table { 
+                table-layout: fixed; /* Esto es crucial */
                 width: 100%; 
                 border-collapse: collapse; 
                 margin-top: 20px;
+            }
+            th:first-child,
+            .td_key {
+                width: 150px; /* Ancho fijo en píxeles */
+                max-width: 150px;
+                min-width: 150px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+
+            /* Ajustamos la columna de acciones */
+            th:last-child,
+            .controls {
+                width: 200px;
+                max-width: 200px;
+                min-width: 200px;
             }
             th, td { 
                 padding: 12px; 
@@ -31,10 +49,14 @@
             .txt_area_value {
                 width: 100%;
                 min-height: 100px;
+                max-height: 300px; /* Altura máxima */
                 font-family: monospace;
                 padding: 8px;
                 border: 1px solid #ddd;
                 border-radius: 4px;
+                resize: vertical; /* Permite redimensionar solo verticalmente */
+                overflow-y: auto; /* Scroll vertical */
+                box-sizing: border-box;
             }
             button {
                 padding: 8px 16px;
@@ -68,19 +90,64 @@
             }
             .controls {
                 text-align: center;
-                max-width: 50px;
+                /* max-width: 50px; */
+                width: 10%; /* Ancho fijo para la columna de acciones */
             }
             .controls button {
                 display: inline-grid;
                 margin: 5px auto;
             }
             .container-txt_area {
-                padding-left: 20px;
-                padding-right: 40px;
+                width: auto;
+                position: relative;
+                padding: 10px;
             }
             .center { text-align: center;  }
-            .td_key { max-width: 50px; }
-        </style>
+            .td_key {
+                width: 8%; /* Reducido de 15% a 8% */
+                word-break: break-all;
+                overflow-wrap: break-word;
+            }
+
+            .preview-container {
+                white-space: pre-wrap;
+                font-family: monospace;
+                padding: 8px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                min-height: 50px;     /* Reducido de 100px a 50px */
+                max-height: 50px;    /* Reducido de 300px a 150px */
+                overflow-y: auto; /* Scroll vertical */
+                background-color: #f8f8f8;
+                word-break: break-word; /* Rompe palabras largas */
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .edit-mode .preview-container {
+                display: none;
+            }
+
+            .edit-mode .txt_area_value {
+                display: block;
+            }
+
+            .preview-mode .preview-container {
+                display: block;
+            }
+
+            .preview-mode .txt_area_value {
+                display: none;
+            }
+
+            .toggle-edit {
+                position: absolute;
+                right: 10px;
+                top: 10px;
+                background: #666;
+                padding: 4px 8px;
+                font-size: 12px;
+            }</style>
     </head>
     <body>
         <div class="container">
@@ -100,8 +167,16 @@
                     ${data.map(item => `
                         <tr>
                             <td class="td_key">${item.key}</td>
-                            <td class="container-txt_area">
-                                <textarea id="value-${item.key}" class="txt_area_value">${formatValue(item.value)}</textarea>
+                            <td class="container-txt_area preview-mode">
+                                <div style="position: relative;">
+                                    <button class="toggle-edit" onclick="toggleEditMode('${item.key}')">
+                                        <svg class="w-6 h-6 text-gray-800 dark:text-white" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 24 24">
+                                            <path fill-rule="evenodd" d="M5 3a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7.414A2 2 0 0 0 20.414 6L18 3.586A2 2 0 0 0 16.586 3H5Zm10 11a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" clip-rule="evenodd"/>
+                                        </svg>
+                                    </button>
+                                    <div class="preview-container">.......................................................................................................................................................................................................................................................................................................................................</div>
+                                    <textarea id="value-${item.key}" class="txt_area_value">.......................................................................................................................................................................................................................................................................................................................................</textarea>
+                                </div>
                             </td>
                             <td class="controls">
                                 <button class="btn_edit" onclick="updateStorage('${item.key}')">
@@ -156,6 +231,23 @@
                 }, function(err) {
                     console.error('Async: Could not copy text: ', err);
                 });
+            }
+
+            function toggleEditMode(key) {
+                const container = document.querySelector('#value-\${key}').parentElement.parentElement;
+                const button = container.querySelector('.toggle-edit');
+                const isEditMode = container.classList.contains('edit-mode');
+                
+                if (isEditMode) {
+                    container.classList.remove('edit-mode');
+                    container.classList.add('preview-mode');
+                    button.innerHTML = 
+                        'ver';
+                } else {
+                    container.classList.add('edit-mode');
+                    container.classList.remove('preview-mode');
+                    button.innerHTML = 'ocultar';
+                }
             }
         </script>
     </body>
