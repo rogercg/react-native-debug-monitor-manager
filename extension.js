@@ -38,6 +38,12 @@ function activate(context) {
                             data: message.data
                         });
                         break;
+                    case 'deleteStorage':
+                        wsServer.broadcast({
+                            type: 'DELETE_VALUE',
+                            data: message.data
+                        });
+                        break;
                     case 'refreshStorage':
                         wsServer.broadcast({
                             type: 'GET_STORAGE'

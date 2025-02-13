@@ -8,7 +8,9 @@ A VSCode extension that helps you debug and manage AsyncStorage in your React Na
 - ✏️ Edit storage values directly from VSCode
 - 🔄 Auto-refresh when storage changes
 - 🚀 Works with both iOS and Android
+- 📱 Support for physical devices
 - 💻 Simple and intuitive interface
+- ❌ Fix delete items
 
 ## Installation
 
