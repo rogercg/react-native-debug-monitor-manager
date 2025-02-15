@@ -10,6 +10,7 @@ A VSCode extension that helps you debug and manage AsyncStorage in your React Na
 - 🚀 Works with both iOS and Android
 - 📱 Support for physical devices
 - 💻 Simple and intuitive interface
+- 🔌 Dynamic port configuration
 - ❌ Fix delete items
 
 ## Installation
@@ -27,7 +28,13 @@ A VSCode extension that helps you debug and manage AsyncStorage in your React Na
    import StorageDebugger from 'rn-storage-debugger';
 
    if (__DEV__) {
+     // Basic usage with default port (12380)
      StorageDebugger.start();
+
+     // Or specify a custom port
+     StorageDebugger.start({
+       port: 8088 // Any available port
+     });
    }
    ```
 
@@ -35,6 +42,11 @@ A VSCode extension that helps you debug and manage AsyncStorage in your React Na
    - Open Command Palette (Cmd/Ctrl + Shift + P)
    - Type "RN: View Storage"
    - Press Enter
+
+3. Port Configuration:
+   - Default port is 12380
+   - Change port through the UI in the extension
+   - Automatic fallback to default port if selected port is in use
 
 ## Requirements
 
@@ -45,12 +57,14 @@ A VSCode extension that helps you debug and manage AsyncStorage in your React Na
 
 This extension contributes the following settings:
 
-* `rnStorageManager.port`: Port to use for WebSocket connection (default: 8082)
+* `rnStorageManager.port`: Port for WebSocket connection (default: 12380)
+* Port can be changed dynamically through the extension's UI
 
 ## Known Issues
 
 - Currently works only with development builds
 - WebSocket connection might need a refresh if the Metro bundler is restarted
+- Some ports might be unavailable if already in use by other development servers (e.g., 8081 for Metro)
 
 ## Contributing
 

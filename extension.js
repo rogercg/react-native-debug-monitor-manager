@@ -19,13 +19,40 @@ function activate(context) {
 
         function updateWebview() {
             panel.webview.html = getWebviewContent(storageData);
+            // Enviar el estado del servidor nuevamente después de actualizar la vista
+            panel.webview.postMessage({
+                type: 'SERVER_STATUS',
+                data: {
+                    running: true,
+                    port: wsServer.port
+                }
+            });
         }
 
-        wsServer.onMessage = (message) => {
-            console.log('Received message from RN:', message);
-            if (message.type === 'STORAGE_DATA') {
-                storageData = message.data;
-                updateWebview();
+        wsServer.onMessage = (messageData) => {
+            try {
+                // Asegurarnos que tenemos un mensaje válido
+                if (!messageData) {
+                    console.error('Received empty message');
+                    return;
+                }
+        
+                console.log('Received message from RN:', messageData);
+                
+                // Validar que el mensaje tiene el formato esperado
+                if (messageData.type === 'STORAGE_DATA' && messageData.data) {
+                    storageData = messageData.data;
+                    updateWebview();
+                } else if (messageData.type === 'SERVER_STATUS') {
+                    panel.webview.postMessage({
+                        type: 'SERVER_STATUS',
+                        data: messageData.data
+                    });
+                } else {
+                    console.warn('Received message with invalid format:', messageData);
+                }
+            } catch (error) {
+                console.error('Error processing message:', error);
             }
         };
 
@@ -49,6 +76,15 @@ function activate(context) {
                             type: 'GET_STORAGE'
                         });
                         break;
+                    case 'clearAllStorage':
+                        wsServer.broadcast({
+                            type: 'CLEAR_ALL_STORAGE'
+                        });
+                        break;
+                    case 'changePort':
+                        console.log('Changing port to:', message.data.port);
+                        wsServer.setPort(message.data.port);
+                        break;
                 }
             },
             undefined,
@@ -60,6 +96,19 @@ function activate(context) {
     });
 
     context.subscriptions.push(disposable);
+
+    let disposableSetPort = vscode.commands.registerCommand('extension.setStoragePort', async () => {
+        const port = await vscode.window.showInputBox({
+            prompt: "Enter port number",
+            placeHolder: "12380"
+        });
+        
+        if (port) {
+            wsServer.setPort(parseInt(port));
+        }
+    });
+    
+    context.subscriptions.push(disposableSetPort);
 }
 
 function deactivate() {
@@ -227,14 +276,52 @@ function getWebviewContent(data = []) {
                 font-size: 12px;
             }
 
+            /* Agregar en la sección de estilos */
+            .server-running {
+                background-color: rgba(27, 192, 32, 0.1);
+                color: #1bc020;
+            }
+
+            .server-stopped {
+                background-color: rgba(239, 34, 34, 0.1);
+                color: #ef2222;
+            }
+
+            .dot-running {
+                background-color: #1bc020;
+            }
+
+            .dot-stopped {
+                background-color: #ef2222;
+            }
             
         </style>
     </head>
     <body>
         <div class="container">
             <div class="header">
-                <h1>React Native Storage Viewer</h1>
-                <button onclick="refreshStorage()">Refresh</button>
+                 <div style="display: flex; align-items: center; gap: 10px;">
+                    <button onclick="refreshStorage()">Refresh</button>
+                    <button class="btn_delete" onclick="clearAllStorage()">Clear All</button>
+                    <div style="display: flex; align-items: center; gap: 5px; margin-left: 15px; padding-left: 15px; border-left: 1px solid #ddd;">
+                        <span>Port:</span>
+                        <input 
+                            type="number" 
+                            id="portInput" 
+                            placeholder="12380" 
+                            style="width: 80px; padding: 4px; border: 1px solid #ddd; border-radius: 4px;"
+                        />
+                        <button onclick="changePort()" class="btn_edit" style="padding: 4px 8px;">
+                            Apply
+                        </button>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 5px; margin-left: 15px; padding-left: 15px; border-left: 1px solid #ddd;">
+                        <div id="serverStatus" style="display: flex; align-items: center; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-right: 10px;">
+                            <span style="width: 8px; height: 8px; border-radius: 50%; margin-right: 5px;" id="statusDot"></span>
+                            <span id="statusText"></span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <table>
                 <thead>
@@ -305,6 +392,13 @@ function getWebviewContent(data = []) {
                     command: 'refreshStorage'
                 });
             }
+
+            function clearAllStorage() {
+                vscode.postMessage({
+                    command: 'clearAllStorage'
+                });
+            }
+
             function copyStorage(key) {
                 const value = document.getElementById('value-' + key).value;
                 navigator.clipboard.writeText(value).then(function() {
@@ -312,6 +406,22 @@ function getWebviewContent(data = []) {
                 }, function(err) {
                     console.error('Async: Could not copy text: ', err);
                 });
+            }
+
+            function changePort() {
+                const portInput = document.getElementById('portInput');
+                const newPort = parseInt(portInput.value);
+
+                portInput.value = '';
+                
+                if (newPort && newPort > 0 && newPort < 65536) {
+                    vscode.postMessage({
+                        command: 'changePort',
+                        data: { port: newPort }
+                    });
+                } else {
+                    alert('Please enter a valid port number (1-65535)');
+                }
             }
 
             function toggleEditMode(key) {
@@ -342,6 +452,47 @@ function getWebviewContent(data = []) {
                     \`;
                 }
             }
+
+            // Agregar al final del script
+            function updateServerStatus(isRunning, port, error) {
+                const statusContainer = document.getElementById('serverStatus');
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                const portInput = document.getElementById('portInput');
+                
+                if (error) {
+                    statusContainer.className = 'server-stopped';
+                    statusDot.className = 'dot-stopped';
+                    statusText.textContent = error;
+                    portInput.placeholder = '12380';
+                    return;
+                }
+                
+                if (isRunning) {
+                    statusContainer.className = 'server-running';
+                    statusDot.className = 'dot-running';
+                    statusText.textContent = 'Server running on port ' + port;
+                    portInput.placeholder = port.toString();
+                } else {
+                    statusContainer.className = 'server-stopped';
+                    statusDot.className = 'dot-stopped';
+                    statusText.textContent = 'Server stopped';
+                }
+}
+
+            // Agregar el listener de mensajes
+            window.addEventListener('message', event => {
+                const message = event.data;
+                if (message?.type === 'SERVER_STATUS') {
+                    updateServerStatus(
+                        message.data.running, 
+                        message.data.port,
+                        message.data.error
+                    );
+                }
+            });
+
+
         </script>
     </body>
     </html>`;
