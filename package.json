@@ -2,7 +2,7 @@
   "name": "rnstoragemanager",
   "displayName": "RNStorageManager",
   "description": "Extensión para la gestión del Storage en aplicaciones de React Native",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "publisher": "rogercg",
   "engines": {
     "vscode": "^1.97.0"
