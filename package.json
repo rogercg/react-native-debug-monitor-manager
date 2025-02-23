@@ -2,7 +2,8 @@
   "name": "react-native-debug-monitor",
   "displayName": "React Native Debug Monitor",
   "description": "Monitor and debug Storage and Network requests in React Native applications",
-  "version": "1.0.0",
+  "version": "1.0.0-preview.1",
+  "preview": true,
   "publisher": "rogercg",
   "engines": {
     "vscode": "^1.97.0"
