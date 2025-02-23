@@ -1,12 +1,21 @@
 const vscode = require('vscode');
 const wsServer = require('./websocket-server');
+const networkViewProvider = require('./network-view-provider');
+
+// Configuración para ordenación de la red
+let networkSortConfig = {
+    field: 'startTime',     // Por defecto ordenar por tiempo de inicio
+    direction: 'desc'       // Descendente (más nuevos primero)
+};
 
 function activate(context) {
     console.log('Extension "RNStorageManager" is now active!');
 
     let storageData = [];
+    let networkData = []; // Para almacenar datos de red
 
-    let disposable = vscode.commands.registerCommand('extension.viewStorage', () => {
+    // Comando para ver el almacenamiento
+    let disposableViewStorage = vscode.commands.registerCommand('extension.viewStorage', () => {
         const panel = vscode.window.createWebviewPanel(
             'storageViewer',
             'React Native Storage Viewer',
@@ -18,12 +27,11 @@ function activate(context) {
         );
 
         function updateWebview() {
-            panel.webview.html = getWebviewContent(storageData);
-            // Enviar el estado del servidor nuevamente después de actualizar la vista
+            panel.webview.html = getWebviewContent(storageData);  // Solo cambia esta línea
             panel.webview.postMessage({
                 type: 'SERVER_STATUS',
                 data: {
-                    running: true,
+                    running: wsServer.wss !== null,
                     port: wsServer.port
                 }
             });
@@ -31,15 +39,11 @@ function activate(context) {
 
         wsServer.onMessage = (messageData) => {
             try {
-                // Asegurarnos que tenemos un mensaje válido
                 if (!messageData) {
                     console.error('Received empty message');
                     return;
                 }
-        
-                console.log('Received message from RN:', messageData);
                 
-                // Validar que el mensaje tiene el formato esperado
                 if (messageData.type === 'STORAGE_DATA' && messageData.data) {
                     storageData = messageData.data;
                     updateWebview();
@@ -48,8 +52,6 @@ function activate(context) {
                         type: 'SERVER_STATUS',
                         data: messageData.data
                     });
-                } else {
-                    console.warn('Received message with invalid format:', messageData);
                 }
             } catch (error) {
                 console.error('Error processing message:', error);
@@ -59,6 +61,42 @@ function activate(context) {
         panel.webview.onDidReceiveMessage(
             message => {
                 switch (message.command) {
+                    case 'clearNetworkHistory':
+                        wsServer.broadcast({
+                            type: 'NETWORK_EVENT',
+                            eventType: 'CLEAR_NETWORK_HISTORY',
+                            data: {}
+                        });
+                        // También limpiar los datos locales
+                        networkData = [];
+                        updateWebview();
+                        break;
+                    case 'refreshNetwork':
+                        // Solicitar actualización explícita
+                        wsServer.broadcast({
+                            type: 'NETWORK_REFRESH'
+                        });
+                        // Después de 5 segundos, notificar finalización (en caso de que no haya respuesta)
+                        setTimeout(() => {
+                            panel.webview.postMessage({
+                                type: 'REFRESH_COMPLETE'
+                            });
+                        }, 5000);
+                        break;
+                    case 'sortNetwork':
+                        // Actualizar la configuración de ordenación
+                        networkSortConfig = {
+                            field: message.data.field || 'startTime',
+                            direction: message.data.direction || 'desc'
+                        };
+                        
+                        // Establecer el orden en el servidor
+                        wsServer.setSortOrder(networkSortConfig.field, networkSortConfig.direction);
+                        
+                        // Solicitar nueva lista ordenada
+                        networkData = wsServer.getAllNetworkRequests();
+                        updateWebview(networkSortConfig);
+                        break;
                     case 'updateStorage':
                         wsServer.broadcast({
                             type: 'UPDATE_VALUE',
@@ -95,7 +133,118 @@ function activate(context) {
         updateWebview();
     });
 
-    context.subscriptions.push(disposable);
+    // Nuevo comando para ver las solicitudes de red
+    let disposableViewNetwork = vscode.commands.registerCommand('extension.viewNetwork', () => {
+        const panel = vscode.window.createWebviewPanel(
+            'networkViewer',
+            'React Native Network Monitor',
+            vscode.ViewColumn.One,
+            {
+                enableScripts: true,
+                retainContextWhenHidden: true
+            }
+        );
+
+        function updateWebview() {
+            panel.webview.html = networkViewProvider.getNetworkWebviewContent(networkData);
+            // Enviar el estado del servidor
+            panel.webview.postMessage({
+                type: 'SERVER_STATUS',
+                data: {
+                    running: wsServer.wss !== null,
+                    port: wsServer.port
+                }
+            });
+        }
+
+        // Guardar el onMessage original
+        const originalOnMessage = wsServer.onMessage;
+        
+        // Definir un nuevo manejador de mensajes
+        wsServer.onMessage = (messageData) => {
+            try {
+                // Llamar al handler original para mantener funcionalidad existente
+                if (originalOnMessage && messageData.type !== 'NETWORK_EVENT' && messageData.type !== 'NETWORK_HISTORY') {
+                    originalOnMessage(messageData);
+                }
+                
+                // Procesar mensajes relacionados con la red
+                if (messageData.type === 'NETWORK_EVENT') {
+                    const { eventType, data } = messageData;
+                    
+                    if (eventType === 'CLEAR_NETWORK_HISTORY') {
+                        networkData = [];
+                    } else if (data && data.id) {
+                        // Actualizar o agregar la solicitud
+                        const existingIndex = networkData.findIndex(req => req.id === data.id);
+                        if (existingIndex >= 0) {
+                            networkData[existingIndex] = data;
+                        } else {
+                            // Añadir al principio para mostrar los más recientes primero
+                            networkData.unshift(data);
+                        }
+                        
+                        // Limitar a 100 solicitudes por rendimiento
+                        if (networkData.length > 100) {
+                            networkData = networkData.slice(0, 100);
+                        }
+                    }
+                    
+                    updateWebview();
+                } else if (messageData.type === 'NETWORK_HISTORY') {
+                    // Actualizar todo el historial
+                    networkData = messageData.data || [];
+                    updateWebview();
+                } else if (messageData.type === 'SERVER_STATUS') {
+                    panel.webview.postMessage({
+                        type: 'SERVER_STATUS',
+                        data: messageData.data
+                    });
+                }
+            } catch (error) {
+                console.error('Error processing network message:', error);
+            }
+        };
+
+        panel.webview.onDidReceiveMessage(
+            message => {
+                switch (message.command) {
+                    case 'clearNetworkHistory':
+                        wsServer.broadcast({
+                            type: 'NETWORK_EVENT',
+                            eventType: 'CLEAR_NETWORK_HISTORY',
+                            data: {}
+                        });
+                        // También limpiar los datos locales
+                        networkData = [];
+                        updateWebview();
+                        break;
+                    case 'refreshNetwork':
+                        // Solicitar historial de red
+                        networkData = wsServer.getAllNetworkRequests();
+                        updateWebview();
+                        break;
+                    case 'changePort':
+                        console.log('Changing port to:', message.data.port);
+                        wsServer.setPort(message.data.port);
+                        break;
+                }
+            },
+            undefined,
+            context.subscriptions
+        );
+
+        panel.onDidDispose(() => {
+            // Restaurar el handler original cuando se cierra el panel
+            wsServer.onMessage = originalOnMessage;
+        }, null, context.subscriptions);
+
+        wsServer.start();
+        
+        // Inicializar con los datos existentes
+        networkData = wsServer.getAllNetworkRequests();
+        updateWebview();
+    });
 
     let disposableSetPort = vscode.commands.registerCommand('extension.setStoragePort', async () => {
         const port = await vscode.window.showInputBox({
@@ -108,6 +257,8 @@ function activate(context) {
         }
     });
     
+    context.subscriptions.push(disposableViewStorage);
+    context.subscriptions.push(disposableViewNetwork);
     context.subscriptions.push(disposableSetPort);
 }
 
@@ -447,8 +598,6 @@ function getWebviewContent(data = []) {
                             <path d="m14.7 10.726 4.995-5.007A.998.998 0 0 0 18.99 4a1 1 0 0 0-.71.305l-4.995 5.007a2.98 2.98 0 0 0-.588-.21l-.035-.01a2.981 2.981 0 0 0-3.584 3.583c0 .012.008.022.01.033.05.204.12.402.211.59l-4.995 4.983a1 1 0 1 0 1.414 1.414l4.995-4.983c.189.091.386.162.59.211.011 0 .021.007.033.01a2.982 2.982 0 0 0 3.584-3.584c0-.012-.008-.023-.011-.035a3.05 3.05 0 0 0-.21-.588Z"/>
                             <path d="m19.821 8.605-2.857 2.857a4.952 4.952 0 0 1-5.514 5.514l-1.785 1.785c.767.166 1.55.25 2.335.251 6.453 0 10-5.258 10-7 0-1.166-1.637-2.874-2.179-3.407Z"/>
                         </svg>
-                        
-
                     \`;
                 }
             }
@@ -478,7 +627,7 @@ function getWebviewContent(data = []) {
                     statusDot.className = 'dot-stopped';
                     statusText.textContent = 'Server stopped';
                 }
-}
+            }
 
             // Agregar el listener de mensajes
             window.addEventListener('message', event => {
@@ -491,8 +640,6 @@ function getWebviewContent(data = []) {
                     );
                 }
             });
-
-
         </script>
     </body>
     </html>`;

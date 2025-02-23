@@ -1,8 +1,8 @@
 {
-  "name": "rnstoragemanager",
-  "displayName": "RNStorageManager",
-  "description": "Extensión para la gestión del Storage en aplicaciones de React Native",
-  "version": "0.0.5",
+  "name": "react-native-debug-monitor",
+  "displayName": "React Native Debug Monitor",
+  "description": "Monitor and debug Storage and Network requests in React Native applications",
+  "version": "1.0.0",
   "publisher": "rogercg",
   "engines": {
     "vscode": "^1.97.0"
@@ -14,7 +14,7 @@
   "main": "./extension.js",
   "icon": "images/icon.png",
   "galleryBanner": {
-    "color": "#C80000",
+    "color": "#1e415e",
     "theme": "dark"
   },
   "activationEvents": [
@@ -24,7 +24,12 @@
     "commands": [
       {
         "command": "extension.viewStorage",
-        "title": "View React Native Storage",
+        "title": "View React Native Monitor Storage",
+        "category": "React Native"
+      },
+      {
+        "command": "extension.viewNetwork",
+        "title": "View React Native Monitor Network",
         "category": "React Native"
       }
     ]
@@ -47,7 +52,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/rogercg/rn-storage-manager"
+    "url": "https://github.com/rogercg/react-native-debug-monitor-manager"
   },
   "dependencies": {
     "ws": "^8.18.0"
