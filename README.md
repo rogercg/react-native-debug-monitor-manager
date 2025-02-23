@@ -1,5 +1,3 @@
-Aquí está el README actualizado para la nueva extensión:
-
 # React Native Debug Monitor (Preview)
 
 A VSCode extension that helps you debug and monitor React Native applications in real-time, including AsyncStorage management and Network request monitoring.
