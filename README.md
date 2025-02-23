@@ -79,7 +79,7 @@ StorageDebugger.start({
 
 ## Requirements
 
-- VSCode 1.60.0 or higher
+- VSCode 1.97.0 or higher
 - React Native project
 - @react-native-async-storage/async-storage (for storage monitoring)
 
