@@ -135,7 +135,7 @@ class WebSocketServer {
     
             this.wss = new WebSocket.Server({ 
                 port: this.port,
-                host: 'localhost',
+                host: '0.0.0.0',
                 perMessageDeflate: false
             });
     
